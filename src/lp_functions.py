@@ -11,6 +11,7 @@ import copy
 import range_functions as rng
 
 DEBUG = False
+OPTIMIZATIONS = False
 
 def create_lp_relu(m, lb, ub, linear_affine, nn_layer, neuron):
     if(ub <= 0):
@@ -87,9 +88,12 @@ def compute_node_bounds_with_LP(m, linear_net):
     return bounds
 
 def LP_given_layer_neurons(m, time_budget, box_relus, box_bounds, lp_bounds, weights, biases, layertypes, 
-        nn_layer, lp_layer, lin_net_layer, starting_layer, linear_net, neurons, nn, label):
+        nn_layer, lp_layer, lin_net_layer, starting_layer, linear_net, neurons, nn, label, CURRENT_DATA):
 
     is_affine_layer = layertypes[nn_layer] == 'Affine'
+    CURRENT_DATA['nn'][nn_layer] = {}
+    CURRENT_DATA['nn'][nn_layer]['type'] = layertypes[nn_layer]
+    CURRENT_DATA['nn'][nn_layer]['neurons'] = [{} for i in range(len(weights[nn_layer]))]
     linear_affines = [None for i in range(len(weights[nn_layer]))]
 
     start = time.time()
@@ -98,23 +102,25 @@ def LP_given_layer_neurons(m, time_budget, box_relus, box_bounds, lp_bounds, wei
     for ind, neuron in enumerate(neurons):
         linear_affine = LinExpr(biases[nn_layer][neuron])
         linear_affine.addTerms(weights[nn_layer][neuron], linear_net[lin_net_layer-1])
-        if lp_bounds is not None and (not np.isnan(lp_bounds[lp_layer][neuron][0])) and (not np.isnan(lp_bounds[lp_layer][neuron][1])):
+        if lp_bounds is not None and (not np.isnan(lp_bounds[lp_layer][neuron][0])) and (not np.isnan(lp_bounds[lp_layer][neuron][1])) and OPTIMIZATIONS:
             lb = lp_bounds[lp_layer][neuron][0]
             ub = lp_bounds[lp_layer][neuron][1]
-        elif box_relus is not None and box_relus[lp_layer][neuron][1] <= 0.0 and not is_affine_layer:
+        elif box_relus is not None and box_relus[lp_layer][neuron][1] <= 0.0 and not is_affine_layer and OPTIMIZATIONS:
             lb = ub = 0.0
-        elif is_affine_layer or (nn_layer == starting_layer and box_bounds is not None) or \
+        elif is_affine_layer or (nn_layer == starting_layer and box_bounds is not None and OPTIMIZATIONS) or \
                 ((len(tmp_time_neuron) > 0) and (time.time() - start + (np.array(tmp_time_neuron).mean())) >= time_budget):
             lb, ub = box_bounds[neuron]
         else:
             tmp_time = time.time()
             lb, ub = compute_LP_bounds(m, linear_affine, is_affine_layer)
             tmp_time_neuron.append(time.time() - tmp_time)
+            
+            CURRENT_DATA['nn'][nn_layer]['neurons'][neuron]['lb'] = lb
+            CURRENT_DATA['nn'][nn_layer]['neurons'][neuron]['ub'] = ub
+            CURRENT_DATA['nn'][nn_layer]['neurons'][neuron]['time_taken'] = time.time() - tmp_time
 
         lp_bounds[lp_layer][neuron] = (lb, ub)  
         linear_affines[neuron] = linear_affine
-
-    #print("ratio of layer computed with LP bounds: " + str(len(tmp_time_neuron)) + "/" + str(len(neurons)))
 
     for neuron in neurons:
         lb, ub = lp_bounds[lp_layer][neuron]
@@ -128,7 +134,7 @@ def LP_given_layer_neurons(m, time_budget, box_relus, box_bounds, lp_bounds, wei
 
 
 def create_lin_net(m, time_budgets, linear_net, starting_layer, n_layers, nn, lp_bounds = None, box_relus = None, 
-                    label = None, early_stopping=False):
+                    label = None, early_stopping=False, CURRENT_DATA = None):
     verified_label = False
 
     weights = nn.weights
@@ -154,7 +160,7 @@ def create_lin_net(m, time_budgets, linear_net, starting_layer, n_layers, nn, lp
             m, time_budgets[nn_layer], 
             box_relus, box_bounds, lp_bounds, weights, biases, layertypes, 
             nn_layer, lp_layer, lin_net_layer, starting_layer, 
-            linear_net, sorted_neuron_indices, nn, label)
+            linear_net, sorted_neuron_indices, nn, label, CURRENT_DATA)
 
         #udpating the budgets
         if nn_layer < nn.numlayer - 1:

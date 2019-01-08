@@ -33,18 +33,22 @@ def min_max(m, linear_net, label):
     return None, verified_flag
 
    
-def class_difference(m, linear_net, label):
+def class_difference(m, linear_net, label, CURRENT_DATA):
     m.update()
     verified_flag = True
     outputs = []
-
+    CURRENT_DATA['differences'] = {}
     start = time.time()
     for i in range(0, 10):
         if i != label:
             #print(i)
             m.setObjective(linear_net[-1][i] - linear_net[-1][label] , GRB.MAXIMIZE)
+            start = time.time()
             m.optimize()
             diff = m.getObjective().getValue()
+            CURRENT_DATA['differences'][i] = {}
+            CURRENT_DATA['differences'][i]['diff'] = diff
+            CURRENT_DATA['differences'][i]['time_taken'] = time.time() - start
             outputs.append(diff) 
             if diff > 0:
                 verified_flag = False
@@ -54,44 +58,4 @@ def class_difference(m, linear_net, label):
         print("time to verify: " + str(time.time() - start))
 
     return None, verified_flag
-
-#def class_difference(m, linear_net, label):
-#    m.update()
-#    verified_flag = True
-#    outputs = []
-#
-#    for i in range(0, 10):
-##        best_bd_stop = 0.00999999
-#
-#        succeeded = False
-#        if i != label:
-#            try:
-#                print(i)
-#                start = time.time()
-#                objective = m.addVar(lb = -GRB.INFINITY, ub = 0.0, vtype='C',
-#                            name = 'objective variable ' + str(i))
-#                m.addConstr(objective == linear_net[-1][i] - linear_net[-1][label])
-#                #m.setObjective(linear_net[-1][i] - linear_net[-1][label] , GRB.MAXIMIZE)
-#                m.setObjective(objective, GRB.MAXIMIZE)
-##               print('optimizing', i)
-#                #m.Params.IterationLimit = 1000
-#                #m.Params.TimeLimit = 40
-#                #m.Params.cutoff = 0
-#                #m.Params.BestBdStop = best_bd_stop
-#                m.optimize()
-#                diff = m.getObjective().getValue()
-##                print('diff', diff)
-#                outputs.append(diff)
-##                print('it toook', time.time() - start)
-#                if diff > 0:
-#                    verified_flag = False
-#            except:
-#                print('shoulda halved it')
-#
-#    if DEBUG:
-#        print("differences: " + str(outputs))
-#        print("verified by class-difference LP: " + str(verified_flag) + "")
-#
-#    return None, verified_flag
-
 

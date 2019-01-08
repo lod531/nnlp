@@ -19,10 +19,13 @@ import verification as verification
 #python3 analyzer.py ../mnist_nets/mnist_relu_6_20.txt ../mnist_images/img1.txt 0.021
 
 DEBUG = False
+OPTIMIZATIONS = False
+GATHER_DATA = True
+CURRENT_DATA = {}
 
 np.set_printoptions(suppress=True)
 
-def verify(nn, complete_node_relus, label, time_budgets, lp_bounds = None, box_relus = None, early_stopping = True):
+def verify(nn, complete_node_relus, label, time_budgets, lp_bounds = None, box_relus = None, early_stopping = False):
     n_layers = nn.numlayer
     verified_flag = False
 
@@ -56,11 +59,11 @@ def compute_LP_slice(nn, lp_bounds, relu_bounds, layer, depth, label, time_budge
     relu_bounds_slice = relu_bounds.copy()
     
     m, linear_net, lp_bounds, box_relus, verified_flag = lp.create_lin_net(m, time_budgets, linear_net, layer-depth, depth, nn,
-        lp_bounds = lp_bounds_slice, box_relus = relu_bounds_slice, label=label, early_stopping = early_stopping)
+        lp_bounds = lp_bounds_slice, box_relus = relu_bounds_slice, label=label, early_stopping = early_stopping, CURRENT_DATA = CURRENT_DATA)
 
     if not verified_flag:
         if run_LP_verification and  ( (not verified_flag) or DEBUG):
-            _, lp_verification = verification.class_difference(m, linear_net, label)
+            _, lp_verification = verification.class_difference(m, linear_net, label, CURRENT_DATA)
             if lp_verification:
                 verified_flag = True
 
@@ -132,7 +135,10 @@ if __name__ == '__main__':
     netname = argv[1]
     specname = argv[2]
     epsilon = float(argv[3])
-    #c_label = int(argv[4])
+    CURRENT_DATA['netname'] = netname
+    CURRENT_DATA['image'] = specname
+    CURRENT_DATA['epsilon'] = epsilon
+    CURRENT_DATA['nn'] = {}
     with open(netname, 'r') as netfile:
         netstring = netfile.read()
     with open(specname, 'r') as specfile:
@@ -141,6 +147,7 @@ if __name__ == '__main__':
     x0_low, x0_high = parse_spec(specstring)
     LB_N0, UB_N0 = get_perturbed_image(x0_low,0)
     label = rng.classify_for_zero_epsilon(nn,LB_N0,UB_N0)
+    CURRENT_DATA['label'] = label
     start = time.time()
     if(True or label==int(x0_low[0])):
         LB_N0, UB_N0 = get_perturbed_image(x0_low,epsilon)
@@ -152,6 +159,8 @@ if __name__ == '__main__':
     else:
         print("image not correctly classified by the network. expected label ",int(x0_low[0]), " classified label: ", label)
     end = time.time()
+    pprint(CURRENT_DATA)
+    CURRENT_DATA['total_time_taken'] = end-start
     print("analysis time: ", (end-start), " seconds")
 
 #'''
